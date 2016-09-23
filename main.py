@@ -130,7 +130,7 @@ def updateFolder (path, date ):
         with open(path + INFO_FILE) as file:
             reader = csv.reader(file)
             for row in reader:
-                flag =  (date != row[0])
+                flag = (date != row[0] or row[0] == "y")
             file.close()
         if flag:
             os.remove(path + INFO_FILE)
