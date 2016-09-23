@@ -1,4 +1,4 @@
-import requests, csv, time, os.path, urllib, urllib2
+import getpass, requests, csv, time, os.path, urllib
 from lxml import html
 from os.path import expanduser
 
@@ -8,6 +8,7 @@ CRED_FILE = DIR+ "/creds.csv"
 INFO_FILE = "/info.csv"
 HOME_URL = "http://tecdigital.tec.ac.cr"
 LOGIN_URL = "http://tecdigital.tec.ac.cr/register/"
+REFERER = "http://tecdigital.tec.ac.cr/register/?return%5furl=%2fdotlrn%2findex"
 DOCS = "http://tecdigital.tec.ac.cr/dotlrn/?page_num=2"
 NOMBRE = 0
 URL = 1;
@@ -34,8 +35,8 @@ def login(session_requests):
 
 
     else:
-        username = input("What's your username?")
-        password = input("What's your pin?")
+        username = input("Usuario/Carne?\n")
+        password = getpass.getpass('Contrasena/pin?\n:')
         if not os.path.exists(DIR):
             os.makedirs(DIR)
         with open(CRED_FILE, 'w') as file:
@@ -60,11 +61,19 @@ def login(session_requests):
         "return_url": "/dotlrn/index",
         "formbutton:style": "Entrar",
         "form:id": "login",
-        "from:mode": "edit"
+        "from:mode": "edit",
+        "_confirmed_p":"0",
+        "_refreshing_p": "0",
+        "_submit_button_name":"",
+        "_submit_button_value": ""
+    }
+
+    headers = {'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:48.0) Gecko/20100101 Firefox/48.0',
+               'Referer' : REFERER
     }
 
     # Perform login
-    result = session_requests.post(LOGIN_URL, data=payload, headers=dict(referer=LOGIN_URL))
+    result = session_requests.post(LOGIN_URL, data=payload, headers=headers)
 
 def mainFolders(session_requests):
     # Scrape url
@@ -74,10 +83,13 @@ def mainFolders(session_requests):
 
     folders  = []
     for href in hrefs:
-        folder = [href.text,href.attrib['href']]
-        folders.append(folder)
+        if (raw_input('Do you want '+href.text + '? (y/n)\n')=="y"):
+            folder = [href.text,href.attrib['href']]
+            folders.append(folder)
+        else:
+            updateFolder(DIR + "/" + href.text, "n")
     for folder in folders:
-        updateFolder(DIR + "/" + folder[NOMBRE],"")
+        updateFolder(DIR + "/" + folder[NOMBRE],"y")
         subfolder(session_requests, DIR + "/" + folder[NOMBRE], HOME_URL + folder[URL])
 
 def subfolder(session_requests, path, url):
@@ -97,10 +109,8 @@ def subfolder(session_requests, path, url):
             subs.append(sub)
         else:
             link = downloadLinks[i].attrib['href']
-            file = urllib2.urlopen(HOME_URL + link)
             out = path + "/" + href.text + urllib.unquote(link.split("/")[-1]).decode('utf8')
-            with open(out, 'wb') as output:
-                output.write(file.read())
+            downloadFile(session_requests,HOME_URL + link,out)
         i += 1
     for sub in subs:
         if (updateFolder(path + "/" + sub[NOMBRE], sub[LAST_MODIFIED]) ):
@@ -133,6 +143,14 @@ def updateFolder (path, date ):
     return False;
 
 
+def downloadFile(sessions_requests,url,path):
+    local_filename = url.split('/')[-1]
+    r = sessions_requests.get(url)
+    with open(path, 'wb') as f:
+        for chunk in r.iter_content(chunk_size=1024):
+            if chunk: # filter out keep-alive new chunks
+                f.write(chunk)
+    return
 
 if __name__ == '__main__':
     main()
