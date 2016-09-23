@@ -1,4 +1,4 @@
-import requests, csv, time, os.path
+import requests, csv, time, os.path, urllib, urllib2
 from lxml import html
 from os.path import expanduser
 
@@ -83,18 +83,30 @@ def mainFolders(session_requests):
 def subfolder(session_requests, path, url):
     result = session_requests.get(url, headers=dict(referer=url))
     tree = html.fromstring(result.content)
+
+    types = tree.xpath("//td[contains(@headers,'type')]/img")
     hrefs = tree.xpath("//td[contains(@headers,'name')]/a")
     dates = tree.xpath("//td[contains(@headers,'last_modified')]/text()")
+    downloadLinks = tree.xpath("//td[contains(@headers,'download_link')]/a")
 
     subs = []
+    i = 0
     for href in hrefs:
-        sub = [href.text, href.attrib['href'], dates[len(subs)]]
-        subs.append(sub)
+        if (types[i].attrib['alt']== "Carpeta"):
+            sub = [href.text, href.attrib['href'], dates[i]]
+            subs.append(sub)
+        else:
+            link = downloadLinks[i].attrib['href']
+            file = urllib2.urlopen(HOME_URL + link)
+            out = path + "/" + href.text + urllib.unquote(link.split("/")[-1]).decode('utf8')
+            with open(out, 'wb') as output:
+                output.write(file.read())
+        i += 1
     for sub in subs:
-        updateFolder(path + "/" + sub[NOMBRE], sub[LAST_MODIFIED])
-        subfolder(session_requests, path + "/" + sub[NOMBRE], HOME_URL + sub[URL])
+        if (updateFolder(path + "/" + sub[NOMBRE], sub[LAST_MODIFIED]) ):
+            subfolder(session_requests, path + "/" + sub[NOMBRE], HOME_URL + sub[URL])
 
-
+#Returns need to update
 def updateFolder (path, date ):
     if not os.path.exists(path):
         os.makedirs(path)
@@ -103,6 +115,7 @@ def updateFolder (path, date ):
             data = [date]
             writer.writerow(data)
             file.close()
+        return True;
     else:
         with open(path + INFO_FILE) as file:
             reader = csv.reader(file)
